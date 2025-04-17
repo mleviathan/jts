@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Jts.Models.Jira;
 
-namespace Jts.HttpClients;
+namespace Jts.Services.HttpClients;
 
 public class JiraHttpClient : IJiraHttpClient
 {
@@ -32,11 +32,7 @@ public class JiraHttpClient : IJiraHttpClient
         this.client = client;
     }
 
-    /// <summary>
-    /// Gets the issues from Jira.
-    /// Currently it gets the first 50 issues.
-    /// </summary>
-    /// <returns></returns>
+    /// <inheritdoc/>
     public async Task<GetJiraIssuesResponse?> GetIssues()
     {
         try
@@ -64,7 +60,6 @@ public class JiraHttpClient : IJiraHttpClient
 
         return null;
     }
-
 
     public void Dispose()
     {

@@ -41,7 +41,13 @@ else if (cmd == Commands.AvailableCommands[3])
 }
 else if (cmd == Commands.AvailableCommands[4])
 {
-    jiraManager.GetIssues().GetAwaiter().GetResult();
+    var issues = jiraManager.GetIssues().GetAwaiter().GetResult();
+    if (issues == null || issues.Count == 0)
+    {
+        Console.WriteLine("No issues found.");
+        return;
+    }
+    Console.WriteLine("These are your jira issues: " + string.Join(", ", issues.Select(i => i.Key)));
 }
 else
 {

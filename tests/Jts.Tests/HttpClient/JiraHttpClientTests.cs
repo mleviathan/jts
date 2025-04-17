@@ -1,6 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Headers;
-using Jts.HttpClients;
+using Jts.Services.HttpClients;
 using Moq;
 using Moq.Protected;
 

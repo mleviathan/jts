@@ -1,5 +1,5 @@
-using Jts.HttpClients;
 using Jts.Models.Jira;
+using Jts.Services.HttpClients;
 
 namespace Jts.Services;
 

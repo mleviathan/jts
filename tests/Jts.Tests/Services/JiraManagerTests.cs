@@ -1,7 +1,7 @@
 using System.Net;
-using Jts.HttpClients;
 using Jts.Models.Jira;
 using Jts.Services;
+using Jts.Services.HttpClients;
 using Moq;
 using Moq.Protected;
 
