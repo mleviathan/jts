@@ -1,6 +1,6 @@
-using Jts.Models.Jira;
+using Jts.Models;
 
 public interface IJiraManager
 {
-    Task<List<JiraIssue>?> GetIssues();
+    Task<List<Issue>?> GetIssues();
 }

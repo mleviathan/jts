@@ -16,6 +16,20 @@ public class JiraManagerTests
         Assert.Throws<ArgumentException>(() => new JiraManager(string.Empty, "baseUrl", "email"));
         Assert.Throws<ArgumentException>(() => new JiraManager("apiKey", string.Empty, "email"));
         Assert.Throws<ArgumentException>(() => new JiraManager("apiKey", "baseUrl", string.Empty));
+        Assert.Throws<UriFormatException>(() => new JiraManager("apiKey", "baseUrl", "email"));
+    }
+
+
+    [Fact]
+    public void Constructor_ShouldInstantiate_WhenArgumentsAreValid()
+    {
+        // Arrange & Act & Assert
+        Assert.Throws<ArgumentException>(() => new JiraManager(string.Empty, "baseUrl", "email"));
+        Assert.Throws<ArgumentException>(() => new JiraManager("apiKey", string.Empty, "email"));
+        Assert.Throws<ArgumentException>(() => new JiraManager("apiKey", "baseUrl", string.Empty));
+        var manager = new JiraManager("apiKey", "https://something.com", "email");
+        Assert.NotNull(manager.JiraHttpClient);
+        Assert.IsType<JiraHttpClient>(manager.JiraHttpClient);
     }
 
     [Fact]
@@ -27,7 +41,7 @@ public class JiraManagerTests
             .Setup(client => client.GetIssues())
             .ReturnsAsync(new GetJiraIssuesResponse
             {
-                Issues = new List<JiraIssue> { new JiraIssue { Key = "TEST-1", Description = "desc" } }
+                Issues = new List<JiraIssue> { new JiraIssue { Key = "TEST-1" } }
             });
 
         var jiraManager = new JiraManager(mockHttpClient.Object);
@@ -39,7 +53,6 @@ public class JiraManagerTests
         Assert.NotNull(issues);
         Assert.Single(issues);
         Assert.Equal("TEST-1", issues.First().Key);
-        Assert.Equal("desc", issues.First().Description);
     }
 
     [Fact]

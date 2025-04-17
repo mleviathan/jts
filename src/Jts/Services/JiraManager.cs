@@ -1,11 +1,11 @@
-using Jts.Models.Jira;
+using Jts.Models;
 using Jts.Services.HttpClients;
 
 namespace Jts.Services;
 
 public class JiraManager : IJiraManager
 {
-    private readonly IJiraHttpClient jiraHttpClient;
+    public IJiraHttpClient JiraHttpClient { get; init; }
 
     /// <summary>
     /// Creates a new instance of the JiraManager class.
@@ -20,7 +20,7 @@ public class JiraManager : IJiraManager
         ArgumentException.ThrowIfNullOrEmpty(baseUrl, nameof(baseUrl));
         ArgumentException.ThrowIfNullOrEmpty(email, nameof(email));
 
-        jiraHttpClient = new JiraHttpClient(apiKey, email, null, baseUrl);
+        JiraHttpClient = new JiraHttpClient(apiKey, email, null, baseUrl);
     }
 
     /// <summary>
@@ -31,12 +31,12 @@ public class JiraManager : IJiraManager
     public JiraManager(IJiraHttpClient httpClient)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
-        jiraHttpClient = httpClient;
+        JiraHttpClient = httpClient;
     }
 
-    public async Task<List<JiraIssue>?> GetIssues()
+    public async Task<List<Issue>?> GetIssues()
     {
-        var jiraResponse = await jiraHttpClient.GetIssues();
+        var jiraResponse = await JiraHttpClient.GetIssues();
         if (jiraResponse == null)
         {
             Console.WriteLine("No issues found.");
@@ -49,6 +49,6 @@ public class JiraManager : IJiraManager
             return null;
         }
 
-        return jiraResponse.Issues;
+        return [.. jiraResponse.Issues.Select(_ => new Issue(_))];
     }
 }

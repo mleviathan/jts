@@ -19,7 +19,10 @@ public class JiraHttpClient : IJiraHttpClient
         ArgumentException.ThrowIfNullOrEmpty(baseUrl, nameof(baseUrl));
 
         _ = Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri);
-        ArgumentException.ThrowIfNullOrEmpty(uri?.ToString(), nameof(uri));
+        if (uri is null)
+        {
+            throw new UriFormatException("Invalid baseUrl: + " + uri);
+        }
 
         client ??= new HttpClient();
         client.BaseAddress = uri;
