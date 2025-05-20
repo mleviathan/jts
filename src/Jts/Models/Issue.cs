@@ -25,5 +25,6 @@ public class Issue
         Status = issue.Fields.Status?.Name ?? string.Empty;
         Assignee = issue.Fields.Assignee?.DisplayName ?? string.Empty;
         ProjectKey = issue.Fields.Project?.Key ?? string.Empty;
+        Attachments = issue.Fields.Attachments?.Select(a => a.Content).ToList();
     }
 }

@@ -1,3 +1,4 @@
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using Jts.Models;
 using Jts.Services;
@@ -8,7 +9,7 @@ namespace Jts;
 
 public class JiraManager : IJiraManager
 {
-    private readonly JiraManagerOptions _options; 
+    private readonly JiraManagerOptions _options;
     internal IJiraHttpClient JiraHttpClient { get; init; }
 
     /// <summary>
@@ -54,11 +55,31 @@ public class JiraManager : IJiraManager
 
     public async Task<Issue?> CloneIssue(string issueKey, string projectKey)
     {
-        try 
+        try
         {
             var issueCreator = new JiraIssueCreator(JiraHttpClient, _options.Username);
             await issueCreator.Initialize(issueKey, projectKey);
-            return await issueCreator.CreateIssue(projectKey);
+            var createdIssue = await issueCreator.CreateIssue(projectKey);
+            if (createdIssue == null)
+            {
+                return null;
+            }
+            if (createdIssue.Attachments == null)
+            {
+                return createdIssue;
+            }
+
+            var attachments = new List<string>();
+            foreach (var attachment in createdIssue.Attachments)
+            {
+                var jiraAttachment = await JiraHttpClient.GetAttachment(attachment);
+            }
+
+            // TODO: Add the attachment to the created issue
+
+            Console.WriteLine("Attachments added to the issue.");
+
+            return createdIssue;
         }
         catch (Exception ex)
         {

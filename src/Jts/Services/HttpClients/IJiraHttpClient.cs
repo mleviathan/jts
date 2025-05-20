@@ -73,4 +73,12 @@ public interface IJiraHttpClient
     /// </summary>
     /// <param name="apiKey"></param>
     void SetAuthenticationHeaderAsBearer(string apiKey);
+
+    /// <summary>
+    /// Get the specs from a Jira issue.
+    /// </summary>
+    /// <returns></returns>
+    Task<byte[]?> GetAttachment(string attachmentId, CancellationToken cancellationToken = default);
+
+    Task<bool> PostIssueAttachment(string issueKey, byte[] attachment, CancellationToken cancellationToken = default);
 }

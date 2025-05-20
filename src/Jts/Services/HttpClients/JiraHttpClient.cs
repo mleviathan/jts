@@ -214,7 +214,8 @@ public class JiraHttpClient : BaseHttpClient, IJiraHttpClient
     /// <inheritdoc/>
     public async Task<GetServiceDeskRequestTypeFieldsResponse?> GetServiceDeskRequestTypeFields(int serviceDeskId, int requestTypeId, CancellationToken cancellationToken = default)
     {
-        try {
+        try
+        {
             var response = await client.GetAsync($"rest/servicedeskapi/servicedesk/{serviceDeskId}/requesttype/{requestTypeId}/field", cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -243,4 +244,32 @@ public class JiraHttpClient : BaseHttpClient, IJiraHttpClient
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
     }
 
+    public async Task<byte[]?> GetAttachment(string attachmentId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await client.GetAsync($"/rest/api/2/attachment/{attachmentId}", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                Console.WriteLine("Received valid attachment from Jira.");
+
+                return content;
+            }
+
+            Console.WriteLine($"Error retrieving issues from Jira, received status code: {response.StatusCode}");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Unexpected error: {e.Message}");
+        }
+
+        return null;
+    }
+
+    public Task<bool> PostIssueAttachment(string issueKey, byte[] attachment, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
 }
