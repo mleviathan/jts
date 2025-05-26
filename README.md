@@ -24,5 +24,9 @@ An example of a valid secrets.json is:
     "email": {email}
 }
 ```
+then run 
+```
+cd src && dotnet run
+```
 
 The application will check if everything is setup correctly right after starting.
