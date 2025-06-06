@@ -1,3 +1,4 @@
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using Jts.Models;
 using Jts.Services;
@@ -8,8 +9,9 @@ namespace Jts;
 
 public class JiraManager : IJiraManager
 {
-    private readonly JiraManagerOptions _options; 
+    private readonly JiraManagerOptions _options;
     internal IJiraHttpClient JiraHttpClient { get; init; }
+    internal IJiraAttachmentHttpClient JiraAttachmentHttpClient { get; init; }
 
     /// <summary>
     /// Creates a new instance of the JiraManager class.
@@ -31,6 +33,8 @@ public class JiraManager : IJiraManager
         ArgumentException.ThrowIfNullOrEmpty(email, nameof(email));
 
         JiraHttpClient = new JiraHttpClient(apiKey, email, baseUrl, null);
+        JiraAttachmentHttpClient = new JiraAttachmentHttpClient(apiKey, email, null);
+
         _options = jiraManagerOptions;
     }
 
@@ -54,11 +58,25 @@ public class JiraManager : IJiraManager
 
     public async Task<Issue?> CloneIssue(string issueKey, string projectKey)
     {
-        try 
+        try
         {
-            var issueCreator = new JiraIssueCreator(JiraHttpClient, _options.Username);
+            var issueCreator = new JiraIssueCreator(JiraHttpClient, _options.Username, JiraAttachmentHttpClient);
             await issueCreator.Initialize(issueKey, projectKey);
-            return await issueCreator.CreateIssue(projectKey);
+            var createdIssue = await issueCreator.CreateIssue(projectKey);
+            if (createdIssue == null)
+            {
+                return null;
+            }
+
+            if (createdIssue.AttachmentsContentUris == null || createdIssue.AttachmentsContentUris.Count == 0)
+            {
+                return createdIssue;
+            }
+
+            await issueCreator.AlignAttachments(createdIssue);
+            Console.WriteLine("Attachments added to the issue.");
+
+            return createdIssue;
         }
         catch (Exception ex)
         {
@@ -79,6 +97,7 @@ public class JiraManager : IJiraManager
             case JiraConnectionStatusEnum.Unauthorized:
                 Console.WriteLine("Unauthorized, switching to Bearer token.");
                 JiraHttpClient.SetAuthenticationHeaderAsBearer(_options.ApiKey);
+                JiraAttachmentHttpClient.SetAuthenticationHeaderAsBearer(_options.ApiKey);
                 status = await JiraHttpClient.HeadIssues();
                 if (status == JiraConnectionStatusEnum.Unauthorized)
                 {

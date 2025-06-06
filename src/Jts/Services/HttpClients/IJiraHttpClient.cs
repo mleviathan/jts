@@ -9,7 +9,7 @@ namespace Jts.Services.HttpClients;
 /// <summary>
 /// Implementation of an HttpClient designed for calls to Jira.
 /// </summary>
-public interface IJiraHttpClient
+public interface IJiraHttpClient : IBaseHttpClient
 {
     /// <summary>
     /// Gets the issues from Jira.
@@ -30,7 +30,7 @@ public interface IJiraHttpClient
     /// Creates a new issue in Servicedesk.
     /// </summary>
     /// <returns></returns>
-    Task<JiraIssue?> PostCreateServiceDeskRequest(PostServiceDeskRequest issueCreateRequest, CancellationToken cancellationToken = default);
+    Task<PostServiceDeskResponse?> PostCreateServiceDeskRequest(PostServiceDeskRequest issueCreateRequest, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the metadata for a specific request type.
@@ -69,8 +69,20 @@ public interface IJiraHttpClient
     Task<GetServiceDeskRequestTypesResponse?> GetServiceDeskRequestTypes(int projectId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Set the authentication header to use Bearer token instead of Basic authentication.
+    /// Uploads an attachment to a Jira service desk request.
     /// </summary>
-    /// <param name="apiKey"></param>
-    void SetAuthenticationHeaderAsBearer(string apiKey);
+    /// <param name="serviceDeskId"></param>
+    /// <param name="filePath"></param>
+    /// <returns></returns>
+    Task<PostTemporaryFileResult?> UploadTemporaryFileAsync(string serviceDeskId, string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds an attachment to a Jira issue using the temporary attachment ID.
+    /// This is used after uploading a file to Jira using the UploadTemporaryFileAsync method.
+    /// </summary>
+    /// <param name="issueKey"></param>
+    /// <param name="temporaryAttachmentId"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    Task<PostAddAttachmentResponse?> PostAddAttachmentToIssueAsync(string issueKey, PostAddAttachmentRequest addAttachmentRequest, CancellationToken cancellationToken = default);
 }

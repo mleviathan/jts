@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -182,7 +183,7 @@ public class JiraHttpClient : BaseHttpClient, IJiraHttpClient
     }
 
     /// <inheritdoc/>
-    public async Task<JiraIssue?> PostCreateServiceDeskRequest(PostServiceDeskRequest issueCreateRequest, CancellationToken cancellationToken = default)
+    public async Task<PostServiceDeskResponse?> PostCreateServiceDeskRequest(PostServiceDeskRequest issueCreateRequest, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -195,7 +196,7 @@ public class JiraHttpClient : BaseHttpClient, IJiraHttpClient
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 Console.WriteLine(content);
 
-                var issue = JsonSerializer.Deserialize<JiraIssue>(content, Options);
+                var issue = JsonSerializer.Deserialize<PostServiceDeskResponse>(content, Options);
                 Console.WriteLine("Created issue in servicedesk.");
 
                 return issue;
@@ -214,7 +215,8 @@ public class JiraHttpClient : BaseHttpClient, IJiraHttpClient
     /// <inheritdoc/>
     public async Task<GetServiceDeskRequestTypeFieldsResponse?> GetServiceDeskRequestTypeFields(int serviceDeskId, int requestTypeId, CancellationToken cancellationToken = default)
     {
-        try {
+        try
+        {
             var response = await client.GetAsync($"rest/servicedeskapi/servicedesk/{serviceDeskId}/requesttype/{requestTypeId}/field", cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -237,10 +239,79 @@ public class JiraHttpClient : BaseHttpClient, IJiraHttpClient
         return null;
     }
 
-    /// <inheritdoc/>
-    public void SetAuthenticationHeaderAsBearer(string apiKey)
+    public async Task<PostAddAttachmentResponse?> PostAddAttachmentToIssueAsync(string issueKey, PostAddAttachmentRequest addAttachmentRequest, CancellationToken cancellationToken = default)
     {
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        try
+        {
+            var serializedCreateRequest = JsonSerializer.Serialize(addAttachmentRequest, Options);
+            Console.WriteLine(serializedCreateRequest);
+            var response = await client.PostAsJsonAsync($"/rest/servicedeskapi/request/{issueKey}/attachment", addAttachmentRequest, Options, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                Console.WriteLine(content);
+
+                var issue = JsonSerializer.Deserialize<PostAddAttachmentResponse>(content, Options);
+                Console.WriteLine("Created issue in servicedesk.");
+
+                return issue;
+            }
+
+            Console.WriteLine($"Error creating issue in ServiceDesk, received status code: {response.StatusCode}");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Unexpected error: {e.Message}");
+        }
+
+        return null;
     }
 
+
+    public async Task<PostTemporaryFileResult?> UploadTemporaryFileAsync(string serviceDeskId, string filePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceDeskId, nameof(serviceDeskId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath, nameof(filePath));
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+            var fileName = Path.GetFileName(filePath);
+            content.Add(new StreamContent(fileStream), "file", fileName);
+
+            // Add required headers, this API is experimental and requires specific headers
+            // please see https://support.atlassian.com/jira/kb/how-to-add-an-attachment-to-a-jira-service-management-cloud-ticket-using-the-rest-apis/
+            if (!client.DefaultRequestHeaders.Contains("X-Atlassian-Token"))
+            {
+                client.DefaultRequestHeaders.Add("X-Atlassian-Token", "no-check");
+            }
+
+            if (!client.DefaultRequestHeaders.Contains("X-ExperimentalApi"))
+            {
+                client.DefaultRequestHeaders.Add("X-ExperimentalApi", "true");
+            }
+
+            var response = await client.PostAsync($"/rest/servicedeskapi/servicedesk/{serviceDeskId}/attachTemporaryFile", content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var resContent = response.Content.ReadAsStringAsync(cancellationToken);
+                Console.WriteLine(JsonSerializer.Serialize(content));
+
+                var metadata = JsonSerializer.Deserialize<PostTemporaryFileResult>(resContent.Result, Options);
+
+                return metadata;
+            }
+
+            Console.WriteLine($"Error uploading temporary attachment in ServiceDesk, received status code: {response.StatusCode}");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Unexpected error while uploading temporary file: {e.Message}");
+        }
+
+        return null;
+    }
 }

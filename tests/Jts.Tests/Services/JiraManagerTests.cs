@@ -258,10 +258,19 @@ public class JiraManagerTests
         {
             RequestTypeFields = new List<RequestTypeField> { field }
         };
-        var clonedIssue = new JiraIssue
+        var clonedIssue = new PostServiceDeskResponse
         {
-            Key = "DEST-1",
-            Fields = new JiraIssueFields { Summary = "Test Issue" }
+            IssueKey = "DEST-1",
+            IssueId = "1",
+            RequestTypeId = "456",
+            ServiceDeskId = "123",
+            Reporter = new Reporter {Name = "test", DisplayName = "test", EmailAddress = "user@example.com", Key = "test", } ,
+            CurrentStatus = new CurrentStatus { Status = "Open" } ,
+            // RequestFieldValues = new RequestFieldValue { Summary = "Test Issue" }
+            RequestFieldValues = new List<RequestFieldValue>
+            {
+                new RequestFieldValue { FieldId = "summary", Value = "Test Issue", }
+            },
         };
 
         mockHttpClient
@@ -337,9 +346,22 @@ public class JiraManagerTests
             .ReturnsAsync(fields);
 
         // Setup create request
-        var createdIssue = new JiraIssue { Key = "DEST-1", Fields = new JiraIssueFields { Summary = "Test Issue" } };
+        var clonedIssue = new PostServiceDeskResponse
+        {
+            IssueKey = "DEST-1",
+            IssueId = "1",
+            RequestTypeId = "456",
+            ServiceDeskId = "123",
+            Reporter = new Reporter {Name = "test", DisplayName = "test", EmailAddress = "user@example.com", Key = "test", } ,
+            CurrentStatus = new CurrentStatus { Status = "Open" } ,
+            // RequestFieldValues = new RequestFieldValue { Summary = "Test Issue" }
+            RequestFieldValues = new List<RequestFieldValue>
+            {
+                new RequestFieldValue { FieldId = "summary", Value = "Test Issue", }
+            },
+        };
         mockHttpClient.Setup(m => m.PostCreateServiceDeskRequest(It.IsAny<PostServiceDeskRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(createdIssue);
+            .ReturnsAsync(clonedIssue);
 
         var jiraManager = new JiraManager(options) { JiraHttpClient = mockHttpClient.Object };
 
