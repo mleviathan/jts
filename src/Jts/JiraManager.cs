@@ -11,6 +11,7 @@ public class JiraManager : IJiraManager
 {
     private readonly JiraManagerOptions _options;
     internal IJiraHttpClient JiraHttpClient { get; init; }
+    internal IJiraAttachmentHttpClient JiraAttachmentHttpClient { get; init; }
 
     /// <summary>
     /// Creates a new instance of the JiraManager class.
@@ -32,6 +33,8 @@ public class JiraManager : IJiraManager
         ArgumentException.ThrowIfNullOrEmpty(email, nameof(email));
 
         JiraHttpClient = new JiraHttpClient(apiKey, email, baseUrl, null);
+        JiraAttachmentHttpClient = new JiraAttachmentHttpClient(apiKey, email, null);
+
         _options = jiraManagerOptions;
     }
 
@@ -57,26 +60,20 @@ public class JiraManager : IJiraManager
     {
         try
         {
-            var issueCreator = new JiraIssueCreator(JiraHttpClient, _options.Username);
+            var issueCreator = new JiraIssueCreator(JiraHttpClient, _options.Username, JiraAttachmentHttpClient);
             await issueCreator.Initialize(issueKey, projectKey);
             var createdIssue = await issueCreator.CreateIssue(projectKey);
             if (createdIssue == null)
             {
                 return null;
             }
-            if (createdIssue.Attachments == null)
+
+            if (createdIssue.AttachmentsContentUris == null || createdIssue.AttachmentsContentUris.Count == 0)
             {
                 return createdIssue;
             }
 
-            var attachments = new List<string>();
-            foreach (var attachment in createdIssue.Attachments)
-            {
-                var jiraAttachment = await JiraHttpClient.GetAttachment(attachment);
-            }
-
-            // TODO: Add the attachment to the created issue
-
+            await issueCreator.AlignAttachments(createdIssue);
             Console.WriteLine("Attachments added to the issue.");
 
             return createdIssue;
@@ -100,6 +97,7 @@ public class JiraManager : IJiraManager
             case JiraConnectionStatusEnum.Unauthorized:
                 Console.WriteLine("Unauthorized, switching to Bearer token.");
                 JiraHttpClient.SetAuthenticationHeaderAsBearer(_options.ApiKey);
+                JiraAttachmentHttpClient.SetAuthenticationHeaderAsBearer(_options.ApiKey);
                 status = await JiraHttpClient.HeadIssues();
                 if (status == JiraConnectionStatusEnum.Unauthorized)
                 {

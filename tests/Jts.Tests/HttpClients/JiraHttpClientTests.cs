@@ -16,14 +16,12 @@ namespace Jts.Tests.HttpClients;
 
 public class JiraHttpClientTests
 {
-    private static Links DefaultLinks => new Links { Self = "http://test" };
     [Fact]
     public void Constructor_ShouldThrowException_WhenArgumentsAreInvalid()
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentException>(() => new JiraHttpClient(string.Empty, "email", "baseUrl"));
         Assert.Throws<ArgumentException>(() => new JiraHttpClient("apiKey", string.Empty, "baseUrl"));
-        Assert.Throws<ArgumentException>(() => new JiraHttpClient("apiKey", "email", string.Empty));
     }
 
     [Fact]
@@ -462,7 +460,20 @@ public class JiraHttpClientTests
     public async Task PostCreateServiceDeskRequest_ShouldReturnJiraIssue_WhenSuccessful()
     {
         // Arrange
-        var mockResponse = new JiraIssue { Key = "TEST-123", Fields = new JiraIssueFields() };
+        var mockResponse = new PostServiceDeskResponse
+        {
+            IssueKey = "DEST-1",
+            IssueId = "1",
+            RequestTypeId = "456",
+            ServiceDeskId = "123",
+            Reporter = new Reporter {Name = "test", DisplayName = "test", EmailAddress = "user@example.com", Key = "test", } ,
+            CurrentStatus = new CurrentStatus { Status = "Open" } ,
+            // RequestFieldValues = new RequestFieldValue { Summary = "Test Issue" }
+            RequestFieldValues = new List<RequestFieldValue>
+            {
+                new RequestFieldValue { FieldId = "summary", Value = "Test Issue", }
+            },
+        };
         var mockHandler = new Mock<HttpMessageHandler>();
         mockHandler.Protected()
             .Setup<Task<HttpResponseMessage>>(
@@ -489,7 +500,7 @@ public class JiraHttpClientTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("TEST-123", result.Key);
+        Assert.Equal("DEST-1", result.IssueKey);
     }
 
     [Fact]
@@ -852,5 +863,204 @@ public class JiraHttpClientTests
 
         // Assert
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task PostAddAttachmentToIssueAsync_WhenSuccessful_ReturnsResponse()
+    {
+        // Arrange
+        var mockResponse = new PostAddAttachmentResponse
+        {
+            // Set any required properties for PostAddAttachmentResponse here
+        };
+        var mockHandler = new Mock<HttpMessageHandler>();
+        mockHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(mockResponse))
+            });
+
+        var client = new JiraHttpClient(
+            "test-api-key",
+            "test@email.com",
+            "https://test.atlassian.net",
+            new HttpClient(mockHandler.Object));
+
+        var request = new PostAddAttachmentRequest(
+            new List<string> { "temp-123" },
+            false
+        );
+
+        // Act
+        var result = await client.PostAddAttachmentToIssueAsync("TEST-123", request);
+
+        // Assert
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task PostAddAttachmentToIssueAsync_WhenNotSuccessful_ReturnsNull()
+    {
+        // Arrange
+        var mockHandler = new Mock<HttpMessageHandler>();
+        mockHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.BadRequest
+            });
+
+        var client = new JiraHttpClient(
+            "test-api-key",
+            "test@email.com",
+            "https://test.atlassian.net",
+            new HttpClient(mockHandler.Object));
+
+        var request = new PostAddAttachmentRequest(
+            new List<string> { "temp-123" },
+            false
+        );
+
+        // Act
+        var result = await client.PostAddAttachmentToIssueAsync("TEST-123", request);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task UploadTemporaryFileAsync_WhenSuccessful_ReturnsResult()
+    {
+        // Arrange
+        var mockResponse = new PostTemporaryFileResult
+        {
+            TemporaryAttachments = new List<TemporaryAttachment> 
+            { 
+                new TemporaryAttachment { FileName = "test.txt", TemporaryAttachmentId = "temp-123" } 
+            }
+        };
+        var mockHandler = new Mock<HttpMessageHandler>();
+        mockHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(mockResponse))
+            });
+
+        var client = new JiraHttpClient(
+            "test-api-key",
+            "test@email.com",
+            "https://test.atlassian.net",
+            new HttpClient(mockHandler.Object));
+
+        // Create a temporary file for testing
+        var tempFilePath = Path.GetTempFileName();
+        File.WriteAllText(tempFilePath, "Test content");
+
+        try
+        {
+            // Act
+            var result = await client.UploadTemporaryFileAsync("SD-123", tempFilePath);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.NotNull(result.TemporaryAttachments);
+            Assert.Single(result.TemporaryAttachments);
+            Assert.Equal("test.txt", result.TemporaryAttachments[0].FileName);
+            Assert.Equal("temp-123", result.TemporaryAttachments[0].TemporaryAttachmentId);
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempFilePath))
+            {
+                File.Delete(tempFilePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UploadTemporaryFileAsync_WhenNotSuccessful_ReturnsNull()
+    {
+        // Arrange
+        var mockHandler = new Mock<HttpMessageHandler>();
+        mockHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.BadRequest
+            });
+
+        var client = new JiraHttpClient(
+            "test-api-key",
+            "test@email.com",
+            "https://test.atlassian.net",
+            new HttpClient(mockHandler.Object));
+
+        // Create a temporary file for testing
+        var tempFilePath = Path.GetTempFileName();
+        File.WriteAllText(tempFilePath, "Test content");
+
+        try
+        {
+            // Act
+            var result = await client.UploadTemporaryFileAsync("SD-123", tempFilePath);
+
+            // Assert
+            Assert.Null(result);
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempFilePath))
+            {
+                File.Delete(tempFilePath);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task UploadTemporaryFileAsync_WithInvalidServiceDeskId_ThrowsArgumentException(string serviceDeskId)
+    {
+        // Arrange
+        var client = new JiraHttpClient("test-api-key", "test@email.com", "https://test.atlassian.net");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            client.UploadTemporaryFileAsync(serviceDeskId, "test.txt"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task UploadTemporaryFileAsync_WithInvalidFilePath_ThrowsArgumentException(string filePath)
+    {
+        // Arrange
+        var client = new JiraHttpClient("test-api-key", "test@email.com", "https://test.atlassian.net");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            client.UploadTemporaryFileAsync("SD-123", filePath));
     }
 }

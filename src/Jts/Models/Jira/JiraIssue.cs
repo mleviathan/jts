@@ -13,7 +13,7 @@ public class JiraIssueFields
     public JiraUser? Assignee { get; set; }
     public JiraIssueType IssueType { get; set; } = new JiraIssueType();
     public JiraProject Project { get; set; } = new JiraProject();
-    public List<JiraAttachment>? Attachments { get; set; }
+    public List<JiraAttachment>? Attachment { get; set; }
 }
 
 public class JiraIssueStatus

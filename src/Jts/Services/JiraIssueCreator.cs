@@ -5,9 +5,10 @@ using Jts.Services.HttpClients;
 
 namespace Jts.Services;
 
-public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
+public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username, IJiraAttachmentHttpClient jiraAttachmentHttpClient)
 {
-    private readonly IJiraHttpClient JiraHttpClient = jiraHttpClient;
+    private readonly IJiraHttpClient _jiraHttpClient = jiraHttpClient;
+    private readonly IJiraAttachmentHttpClient _jiraAttachmentHttpClient = jiraAttachmentHttpClient;
     private readonly IJiraFieldTransformationService _fieldTransformationService = new JiraFieldTransformationService();
     private readonly string _username = username;
     private JiraIssue? _jiraIssue;
@@ -15,9 +16,15 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
     private int? _requestTypeId;
     private List<RequestTypeField>? _requestTypeFields;
 
+    /// <summary>
+    /// Initializes the JiraIssueCreator with the specified issue key and project key.
+    /// </summary>
+    /// <param name="issueKey"></param>
+    /// <param name="projectKey"></param>
+    /// <returns></returns>
     public async Task Initialize(string issueKey, string projectKey)
     {
-        var jiraIssue = await JiraHttpClient.GetIssue(issueKey);
+        var jiraIssue = await _jiraHttpClient.GetIssue(issueKey);
         if (jiraIssue == null)
         {
             Console.WriteLine($"Issue {issueKey} not found.");
@@ -41,7 +48,7 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
         }
         _requestTypeId = requestTypeId.Value;
 
-        var requestTypeFieldsResponse = await JiraHttpClient.GetServiceDeskRequestTypeFields(serviceDeskId.Value, requestTypeId.Value);
+        var requestTypeFieldsResponse = await _jiraHttpClient.GetServiceDeskRequestTypeFields(serviceDeskId.Value, requestTypeId.Value);
         if (requestTypeFieldsResponse == null)
         {
             Console.WriteLine($"Request type fields not found for project {projectKey}.");
@@ -50,6 +57,11 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
         _requestTypeFields = requestTypeFieldsResponse.RequestTypeFields;
     }
 
+    /// <summary>
+    /// Creates a new issue in Jira Service Desk for the specified project key.
+    /// </summary>
+    /// <param name="projectKey"></param>
+    /// <returns></returns>
     public async Task<Issue?> CreateIssue(string projectKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectKey, nameof(projectKey));
@@ -59,16 +71,17 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
         ArgumentNullException.ThrowIfNull(_fieldTransformationService, nameof(_fieldTransformationService));
         ArgumentNullException.ThrowIfNull(_requestTypeId, nameof(_requestTypeId));
         ArgumentNullException.ThrowIfNull(_serviceDeskId, nameof(_serviceDeskId));
-        
+
         if (_requestTypeFields == null || _requestTypeFields.Count == 0)
         {
             Console.WriteLine($"Request type fields not found for project {projectKey}.");
             return null;
         }
 
+        var jiraIssue = new Issue(_jiraIssue);
         var requestFieldValues = _fieldTransformationService.ElaborateRequiredFieldsValues(
             _requestTypeFields,
-            new Issue(_jiraIssue),
+            jiraIssue,
             _username);
 
         var createIssueRequest = new PostServiceDeskRequest(
@@ -76,18 +89,42 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
             _serviceDeskId.Value.ToString(),
             requestFieldValues);
 
-        var createdIssue = await JiraHttpClient.PostCreateServiceDeskRequest(createIssueRequest);
-        if (createdIssue == null)
+        var serviceDeskIssue = await _jiraHttpClient.PostCreateServiceDeskRequest(createIssueRequest);
+        if (serviceDeskIssue == null)
         {
             Console.WriteLine($"Failed to create issue in ServiceDesk for {_jiraIssue.Key}.");
             return null;
         }
 
-        var issue = new Issue(createdIssue);
+        var issue = new Issue(serviceDeskIssue)
+        {
+            AttachmentsContentUris = jiraIssue.AttachmentsContentUris
+        };
+        return issue;
+    }
+
+    public async Task<Issue> AlignAttachments(Issue issue)
+    {
+        var temporaryAttachmentsIds = await CloneAttachmentsAsync(issue);
+
+        if (temporaryAttachmentsIds == null || temporaryAttachmentsIds.Count == 0)
+        {
+            Console.WriteLine($"No attachments to add to issue {issue.Key}");
+            return issue;
+        }
+
+        var stringifiedIds = string.Join(",", temporaryAttachmentsIds);
+        Console.WriteLine($"Adding attachments {stringifiedIds} to issue {issue.Key}");
+        var postAddAttachmentRequest = new PostAddAttachmentRequest(temporaryAttachmentsIds);
+        var addAttachmentResult = await _jiraHttpClient.PostAddAttachmentToIssueAsync(issue.Key, postAddAttachmentRequest);
+        if (addAttachmentResult == null)
+        {
+            Console.WriteLine($"Failed to add attachments {stringifiedIds} to issue {issue.Key}");
+        }
 
         return issue;
     }
-    
+
     /// <summary>
     /// Find the ServiceDesk ID for a given project key.
     /// This is a paginated request, so it will keep fetching until all projects are retrieved or project with given projectKey is found.
@@ -102,7 +139,7 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
 
         do
         {
-            response = await JiraHttpClient.GetServiceDeskProjects(start, limit);
+            response = await _jiraHttpClient.GetServiceDeskProjects(start, limit);
             if (response == null)
             {
                 Console.WriteLine("No projects found.");
@@ -134,7 +171,7 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
     /// <returns>Null if the specified project doesn't have Task as associated request type</returns>
     internal async Task<int?> GetTaskRequestTypeId(int projectId)
     {
-        var response = await JiraHttpClient.GetServiceDeskRequestTypes(projectId);
+        var response = await _jiraHttpClient.GetServiceDeskRequestTypes(projectId);
         if (response == null)
         {
             Console.WriteLine("No request types found.");
@@ -150,4 +187,43 @@ public class JiraIssueCreator(IJiraHttpClient jiraHttpClient, string username)
         return requestType?.Id != null ? int.Parse(requestType.Id) : null;
     }
 
+    internal async Task<List<string>> CloneAttachmentsAsync(Issue issue)
+    {
+        if (issue.AttachmentsContentUris == null || issue.AttachmentsContentUris.Count == 0)
+        {
+            return [];
+        }
+
+        var temporaryAttachmentsIds = new List<string>();
+
+        for (int i = 0; i < issue.AttachmentsContentUris.Count; i++)
+        {
+            var attachmentContentUri = issue.AttachmentsContentUris[i];
+
+            Console.WriteLine($"Downloading attachment from {attachmentContentUri}");
+            var jiraAttachment = await _jiraAttachmentHttpClient.DownloadAttachmentAsync(attachmentContentUri);
+            if (jiraAttachment == null)
+            {
+                Console.WriteLine($"Failed to download attachment from {attachmentContentUri}");
+                continue;
+            }
+
+            string filePath = $"../{Path.GetFileName(attachmentContentUri)}";
+            Console.WriteLine($"Saving attachment to {filePath}");
+            await File.WriteAllBytesAsync(filePath, jiraAttachment);
+
+            var serviceDeskId = _serviceDeskId ?? throw new InvalidOperationException("Service Desk ID is not set.");
+            Console.WriteLine($"Uploading attachment to ServiceDesk with ID: {serviceDeskId}");
+            var uploadResult = await _jiraHttpClient.UploadTemporaryFileAsync(serviceDeskId.ToString(), filePath);
+            if (uploadResult == null)
+            {
+                Console.WriteLine($"Failed to upload attachment to ServiceDesk with ID: {serviceDeskId}");
+                continue;
+            }
+
+            temporaryAttachmentsIds.AddRange(uploadResult.TemporaryAttachments.Select(_ => _.TemporaryAttachmentId));
+        }
+
+        return temporaryAttachmentsIds;
+    }
 }
